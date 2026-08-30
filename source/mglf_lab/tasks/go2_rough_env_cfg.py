@@ -64,22 +64,3 @@ class Go2RoughTeleopEnvCfg(UnitreeGo2RoughEnvCfg):
             interval_range_s=(10.0, 15.0),
             params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
         )
-
-
-@configclass
-class Go2RoughTeleopEnvCfg_PLAY(Go2RoughTeleopEnvCfg):
-    """Small deterministic scene for interactive command playback."""
-
-    def __post_init__(self):
-        super().__post_init__()
-        self.scene.num_envs = 1
-        self.scene.env_spacing = 2.5
-        self.scene.terrain.max_init_terrain_level = None
-        if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 5
-            self.scene.terrain.terrain_generator.num_cols = 5
-            self.scene.terrain.terrain_generator.curriculum = False
-        self.observations.policy.enable_corruption = False
-        self.events.base_external_force_torque = None
-        self.events.push_robot = None
-        self.commands.base_velocity.debug_vis = True

@@ -4,7 +4,7 @@
 > Python 包名：`mglf_lab`  
 > pip 安装包名：`mglf-lab`
 
-基于 Isaaclab_Parkour 当中 teacher 阶段（阶段一）的 Unitree Go2 粗糙地形速度控制项目。策略不依赖 waypoint 或目标点，直接接收遥控速度指令，并利用局部高程扫描适应地形。
+基于 Isaaclab_Parkour 当中 teacher 阶段（阶段一）思路的 Unitree Go2 与 Go2W 粗糙地形速度控制项目。策略不依赖 waypoint 或目标点，直接接收遥控速度指令，并利用局部高程扫描适应地形。
 
 ## 1. 功能与设计
 
@@ -12,8 +12,9 @@
 - 不使用 waypoint、目标位置或导航规划器。
 - 高程扫描范围为 `1.6 m × 1.0 m`，分辨率为 `0.1 m`，共 187 个采样点，并随机器人 yaw 旋转。
 - 使用 Isaac Lab 的 `ROUGH_TERRAINS_CFG`：上下楼梯、斜坡、离散障碍、箱体和随机粗糙面。
-- 上下楼梯高度为 `0.08～0.28 m`，难度随课程等级逐渐提高。
+- Go2 与 Go2W 上下楼梯高度均为 `0.08～0.28 m`。
 - 使用温和的髋关节姿态惩罚抑制内八，同时保留横移和复杂落脚能力。
+- Go2 使用 12 个腿部位置动作；Go2W 使用 12 个腿部位置动作和 4 个轮子速度动作。
 - 使用 Isaac Lab 原生 RSL-RL 流程，不依赖 `Isaaclab_Parkour` 的旧版自定义 runner。
 
 有限的训练分布无法保证机器人通过任意未知地形。沟壑、窄桥、跳跃或松软地面等能力仍需加入对应的训练地形和奖励。
@@ -22,10 +23,15 @@
 
 ```text
 MglfLab/
-├── source/mglf_lab/tasks/
-│   ├── go2_rough_env_cfg.py    # 环境、地形、观测、奖励和指令
-│   ├── rsl_rl_ppo_cfg.py       # PPO 网络和优化参数
-│   └── __init__.py             # Gymnasium 任务注册
+├── source/mglf_lab/
+│   ├── assets/go2w.py                      # Go2W 执行器与初始状态
+│   ├── data/Robots/unitree/go2w_description/ # Go2W URDF 与网格
+│   └── tasks/
+│       ├── go2_rough_env_cfg.py            # Go2 环境
+│       ├── go2w_rough_env_cfg.py           # Go2W 轮腿环境
+│       ├── rsl_rl_ppo_cfg.py               # Go2 PPO 参数
+│       ├── go2w_rsl_rl_ppo_cfg.py          # Go2W PPO 参数
+│       └── __init__.py                     # Gymnasium 任务注册
 ├── scripts/
 │   ├── train.py                # 训练和续训
 │   ├── play.py                 # 多环境随机指令测试
@@ -85,14 +91,14 @@ python scripts/play.py --help
 python scripts/play_keyboard.py --help
 ```
 
-注册的任务：
+项目为两种机器人各注册一个任务；每种机器人的训练和播放共享同一环境配置：
 
 | 任务 | 用途 |
 | --- | --- |
-| `Go2-Rough-Teleop-v0` | 大规模并行训练 |
-| `Go2-Rough-Teleop-Play-v0` | 播放、遥控和可视化 |
+| `Go2-Rough-Teleop-v0` | 训练、随机播放、键盘遥控和可视化 |
+| `Go2W-Rough-Teleop-v0` | Go2W 复杂地形训练、随机播放、键盘遥控和可视化 |
 
-脚本已经设置默认任务，日常使用可以省略 `--task`。
+脚本默认使用 Go2。训练或播放 Go2W 时必须传入 `--task Go2W-Rough-Teleop-v0`。
 
 ## 5. 训练
 
@@ -132,12 +138,69 @@ logs/rsl_rl/go2_rough_teleop/日期_时间_run_name/
 
 默认每 100 轮保存 checkpoint。`--max_iterations` 在新训练中表示训练轮数，在恢复训练中表示本次额外增加的轮数。
 
-### 5.3 中断训练后继续训练
+### 5.3 Go2W 冒烟测试与正式训练
+
+Go2W 第一次启动会把 URDF 转换为 USD，可能比 Go2 多等待一段时间。转换时的
+材质名称和 fixed link 合并警告通常不影响训练。
+
+```bash
+python scripts/train.py \
+  --task Go2W-Rough-Teleop-v0 \
+  --num_envs 32 \
+  --max_iterations 2 \
+  --seed 1 \
+  --headless
+```
+
+冒烟测试通过后正式训练：
+
+```bash
+python scripts/train.py \
+  --task Go2W-Rough-Teleop-v0 \
+  --num_envs 1024 \
+  --max_iterations 10000 \
+  --seed 1 \
+  --run_name seed1 \
+  --headless
+```
+
+Go2W 日志独立保存在 `logs/rsl_rl/go2w_rough_teleop/`，不会覆盖 Go2 日志。
+
+Go2W 按 RobotLab v2.3.2 官方 Go2→Go2W 的差分配置：在 Go2 的 12 个腿部位置动作
+之外增加 4 个缩放为 `5 rad/s` 的轮速动作；轮角度不进入观测，轮速进入观测；腿部
+和轮子的力矩/加速度惩罚分开计算。Go2W 与 Go2 使用相同 PPO 配置，不为轮式版本
+单独改变动作裁剪、网络归一化、探索噪声或学习率。
+
+平地滚动时四个轮子持续接地是正常行为，因此 Go2W 关闭 `feet_air_time` 等纯足式
+步态项，改用 RobotLab Go2/Go2W 公共底座中的行为约束：移动/静止分级腿姿态、对角
+腿对称、朝上奖励、非轮子部件碰地惩罚、轮子接触力和关节限位。高程图作为 MglfLab
+额外的 actor 观测保留，但不直接参与奖励计算。
+
+如果旧 checkpoint 已经学会屈腿贴地爬行，建议使用上述正式训练命令从头训练。虽然
+也可以在新奖励下续训，但 PPO 可能长时间停留在原来的局部最优姿态，不能把续训结果
+作为新配置是否有效的可靠判断。
+
+RobotLab 官方 actor 删除了高程图；MglfLab 为复杂地形能力保留 `1.6 × 1.0 m`
+高程观测，并在进入策略前将 RayCaster 漏检产生的 NaN/Inf 转换为有限值。这里不再
+启用实验性的机身高度奖励，避免高程奖励本身改变 RobotLab 的 Go2W 行为目标。
+
+MglfLab 的遥控指令上限为 `1.5`，高于 RobotLab 常用的 `1.0`，因此 Go2W 的线速度
+和偏航速度指数奖励 `std` 使用 `0.75`（而非 `0.5`），避免高速样本过早进入近零奖励
+区。Go2W 的熵系数为 `0.005`，用于减缓 16 维动作噪声在策略成形后继续上涨；其余
+PPO 参数仍与 Go2 相同。
+
+Go2W 使用楼梯专项课程：上下楼梯各占 30%，台阶高度训练范围为 `0.08～0.28 m`，其余
+40% 保留箱体、随机粗糙面和双向坡面。移动时腿姿态惩罚权重为 `-0.5`，静止倍率为
+`10`，在不削弱零指令站姿的前提下允许跨台阶时更大幅度地抬腿和伸腿。Go2 的楼梯
+分布和奖励不受此设置影响。
+
+### 5.4 中断训练后继续训练
 
 恢复权重、训练轮数和 Adam 优化器，并自动选择该 run 的最新 checkpoint：
 
 ```bash
 python scripts/train.py \
+  --task Go2-Rough-Teleop-v0 \
   --num_envs 1024 \
   --resume \
   --load_run 2026-08-28_10-00-00_seed1 \
@@ -148,12 +211,15 @@ python scripts/train.py \
 
 训练脚本中的 `--checkpoint` 是 `--load_run` 目录内的文件名或匹配表达式。
 
-### 5.4 数值发散后恢复
+Go2W 续训时把任务改为 `Go2W-Rough-Teleop-v0`，程序会自动使用其独立实验目录。
+
+### 5.5 数值发散后恢复
 
 如果出现 `inf`、`nan`、`value_function loss: inf` 或 `normal expects all elements of std >= 0.0`，应回退到最后一个健康 checkpoint，并丢弃旧优化器状态：
 
 ```bash
 python scripts/train.py \
+  --task Go2-Rough-Teleop-v0 \
   --num_envs 1024 \
   --resume \
   --reset_optimizer \
@@ -185,7 +251,9 @@ ssh -L 6006:localhost:6006 用户名@远程主机地址
 
 ## 7. 多环境随机指令播放
 
-`play.py` 同时观察多只 Go2，每个环境独立采样 `[vx, vy, wz]`，每 5～8 秒重新采样。
+`play.py` 可同时观察多只 Go2 或 Go2W，每个环境独立采样 `[vx, vy, wz]`，每 5～8 秒重新采样。
+播放仍使用唯一的训练环境配置，但默认把生成的地形网格从训练时的
+`10 × 20` 缩小为 `5 × 5`。可通过 `--terrain_rows` 和 `--terrain_cols` 调整。
 
 按 run 名称自动选择最新 checkpoint：
 
@@ -203,6 +271,15 @@ python scripts/play.py \
   --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/go2_rough_teleop/RUN目录/model_5000.pt
 ```
 
+Go2W 多环境播放：
+
+```bash
+python scripts/play.py \
+  --task Go2W-Rough-Teleop-v0 \
+  --num_envs 20 \
+  --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/go2w_rough_teleop/RUN目录/model_XXXX.pt
+```
+
 ## 8. 键盘遥控播放
 
 `play_keyboard.py` 默认创建一只 Go2：
@@ -210,6 +287,15 @@ python scripts/play.py \
 ```bash
 python scripts/play_keyboard.py \
   --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/go2_rough_teleop/RUN目录/model_5000.pt
+```
+
+Go2W 键盘遥控：
+
+```bash
+python scripts/play_keyboard.py \
+  --task Go2W-Rough-Teleop-v0 \
+  --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/go2w_rough_teleop/RUN目录/model_XXXX.pt \
+  --visualize_height_scan
 ```
 
 启动后先点击 Isaac Sim 视口：
@@ -248,11 +334,11 @@ python scripts/play_keyboard.py \
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--task` | `Go2-Rough-Teleop-v0` | 训练任务，通常省略 |
+| `--task` | `Go2-Rough-Teleop-v0` | 机器人任务；Go2W 必须指定 `Go2W-Rough-Teleop-v0` |
 | `--num_envs` | 环境配置值 | 并行环境数量 |
-| `--max_iterations` | `3000` | 新训练轮数或本次额外续训轮数 |
+| `--max_iterations` | Go2 为 `3000`，Go2W 为 `10000` | 新训练轮数或本次额外续训轮数 |
 | `--seed` | `1` | 随机种子 |
-| `--experiment_name` | `go2_rough_teleop` | `logs/rsl_rl/` 下的实验目录 |
+| `--experiment_name` | 随任务选择 | Go2 为 `go2_rough_teleop`，Go2W 为 `go2w_rough_teleop` |
 | `--run_name` | 空 | 附加在时间戳后的名称 |
 | `--resume` | 关闭 | 开启恢复训练 |
 | `--reset_optimizer` | 关闭 | 恢复权重和轮数，但不恢复 Adam 状态 |
@@ -267,9 +353,11 @@ python scripts/play_keyboard.py \
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--task` | `Go2-Rough-Teleop-Play-v0` | 播放任务 |
+| `--task` | `Go2-Rough-Teleop-v0` | 必须与 checkpoint 对应；Go2W 使用 `Go2W-Rough-Teleop-v0` |
 | `--num_envs` | `50` | 同时创建的环境数量 |
 | `--seed` | `1` | 地形和随机指令种子 |
+| `--terrain_rows` | `5` | 播放场地的地形行数 |
+| `--terrain_cols` | `5` | 播放场地的地形列数 |
 | `--load_run` | 自动匹配 | 从实验目录选择 run |
 | `--checkpoint` | 自动选择最新 | 可直接传 checkpoint 绝对路径 |
 | `--real_time` | 默认开启 | 按真实时间限速 |
@@ -281,9 +369,11 @@ python scripts/play_keyboard.py \
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--task` | `Go2-Rough-Teleop-Play-v0` | 键盘播放任务 |
+| `--task` | `Go2-Rough-Teleop-v0` | 必须与 checkpoint 对应；Go2W 使用 `Go2W-Rough-Teleop-v0` |
 | `--num_envs` | `1` | 环境数量，建议保持 1 |
 | `--seed` | `1` | 地形随机种子 |
+| `--terrain_rows` | `5` | 播放场地的地形行数 |
+| `--terrain_cols` | `5` | 播放场地的地形列数 |
 | `--load_run` | 自动匹配 | 从实验目录选择 run |
 | `--checkpoint` | 自动选择最新 | 可直接传 checkpoint 绝对路径 |
 | `--linear_step` | `0.2` | 每次按键改变的线速度，单位 `m/s` |
@@ -297,7 +387,7 @@ python scripts/play_keyboard.py \
 
 ## 10. 观测与真实部署
 
-策略观测共 235 维：
+Go2 策略观测为 235 维：
 
 | 观测 | 维度 |
 | --- | ---: |
@@ -310,6 +400,6 @@ python scripts/play_keyboard.py \
 | 上一时刻动作 | 12 |
 | 局部高程扫描 | 187 |
 
-部署到真实 Go2 时必须复现相同的观测顺序、尺度、坐标系、裁剪范围、扫描网格、控制频率和动作映射。仿真中的 RayCaster 不能直接用于真机，需要用深度相机、激光雷达或其他感知模块生成等价的局部高程图。
+Go2W 策略观测为 243 维：腿部相对位置仍为 12 维，关节速度和上一动作分别增加为 16 维，高程扫描仍为 187 维。连续旋转的 4 个轮子角度不会进入策略，防止角度无限累积破坏观测分布。Go2 与 Go2W checkpoint 的输入、输出维度不同，不能混用。
 
-
+部署到真实 Go2 或 Go2W 时必须复现相同的观测顺序、尺度、坐标系、裁剪范围、扫描网格、控制频率和动作映射。仿真中的 RayCaster 不能直接用于真机，需要用深度相机、激光雷达或其他感知模块生成等价的局部高程图。

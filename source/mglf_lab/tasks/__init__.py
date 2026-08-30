@@ -18,15 +18,11 @@ gym.register(
 )
 
 gym.register(
-    id="Go2-Rough-Teleop-Play-v0",
+    id="Go2W-Rough-Teleop-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": (
-            "mglf_lab.tasks.go2_rough_env_cfg:Go2RoughTeleopEnvCfg_PLAY"
-        ),
-        "rsl_rl_cfg_entry_point": (
-            "mglf_lab.tasks.rsl_rl_ppo_cfg:Go2RoughTeleopPPORunnerCfg"
-        ),
+        "env_cfg_entry_point": "mglf_lab.tasks.go2w_rough_env_cfg:Go2WRoughTeleopEnvCfg",
+        "rsl_rl_cfg_entry_point": "mglf_lab.tasks.go2w_rsl_rl_ppo_cfg:Go2WRoughTeleopPPORunnerCfg",
     },
 )
