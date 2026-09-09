@@ -15,6 +15,7 @@
 - Go2 与 Go2W 上下楼梯高度均为 `0.08～0.28 m`。
 - 使用温和的髋关节姿态惩罚抑制内八，同时保留横移和复杂落脚能力。
 - Go2 使用 12 个腿部位置动作；Go2W 使用 12 个腿部位置动作和 4 个轮子速度动作。
+- Go2 从项目内的 URDF + mesh 导入，物理参数已对照原 Isaac Lab Go2 USD 校验；详见 [模型一致性记录](source/mglf_lab/data/Robots/unitree/go2_description/USD_PARITY.md)。
 - 使用 Isaac Lab 原生 RSL-RL 流程，不依赖 `Isaaclab_Parkour` 的旧版自定义 runner。
 
 有限的训练分布无法保证机器人通过任意未知地形。沟壑、窄桥、跳跃或松软地面等能力仍需加入对应的训练地形和奖励。
@@ -25,6 +26,8 @@
 MglfLab/
 ├── source/mglf_lab/
 │   ├── assets/go2w.py                      # Go2W 执行器与初始状态
+│   ├── assets/go2.py                       # Go2 URDF 加载，保留原 USD 训练参数
+│   ├── data/Robots/unitree/go2_description/ # Go2 URDF、网格与一致性记录
 │   ├── data/Robots/unitree/go2w_description/ # Go2W URDF 与网格
 │   └── tasks/
 │       ├── go2_rough_env_cfg.py            # Go2 环境
@@ -140,7 +143,7 @@ logs/rsl_rl/go2_rough_teleop/日期_时间_run_name/
 
 ### 5.3 Go2W 冒烟测试与正式训练
 
-Go2W 第一次启动会把 URDF 转换为 USD，可能比 Go2 多等待一段时间。转换时的
+Go2 和 Go2W 启动时均由 Isaac Lab 将本地 URDF 转换为仿真使用的 USD。转换时的
 材质名称和 fixed link 合并警告通常不影响训练。
 
 ```bash

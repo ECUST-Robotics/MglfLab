@@ -13,6 +13,7 @@ import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
 from isaaclab_tasks.manager_based.locomotion.velocity.config.go2.rough_env_cfg import (
     UnitreeGo2RoughEnvCfg,
 )
+from mglf_lab.assets.go2 import UNITREE_GO2_URDF_CFG
 
 
 @configclass
@@ -21,6 +22,7 @@ class Go2RoughTeleopEnvCfg(UnitreeGo2RoughEnvCfg):
 
     def __post_init__(self):
         super().__post_init__()
+        self.scene.robot = UNITREE_GO2_URDF_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
         # Direct joystick-style commands: forward/back, lateral, and yaw rate.
         # No target heading and no waypoint is involved.

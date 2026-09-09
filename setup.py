@@ -8,6 +8,9 @@ setup(
     package_dir={"": "source"},
     package_data={
         "mglf_lab": [
+            "data/Robots/unitree/go2_description/urdf/*",
+            "data/Robots/unitree/go2_description/meshes/*",
+            "data/Robots/unitree/go2_description/*.md",
             "data/Robots/unitree/go2w_description/urdf/*",
             "data/Robots/unitree/go2w_description/meshes/*",
             "data/LICENSES/*",
