@@ -7,13 +7,15 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 @configclass
 class Go2RoughTeleopPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 3000
+    max_iterations = 17000
     save_interval = 100
     experiment_name = "go2_rough_teleop"
     empirical_normalization = False
+    clip_actions = 10.0
     obs_groups = {"policy": ["policy"], "critic": ["policy"]}
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,
+        noise_std_type="log",
         actor_obs_normalization=False,
         critic_obs_normalization=False,
         actor_hidden_dims=[512, 256, 128],
@@ -27,12 +29,12 @@ class Go2RoughTeleopPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         entropy_coef=0.01,
         num_learning_epochs=5,
         num_mini_batches=4,
-        # A conservative fixed rate prevents rare late-training value-network
-        # divergence and keeps the scalar action standard deviation positive.
-        learning_rate=1.0e-4,
-        schedule="fixed",
+        # Keep the model_5400.pt adaptive KL schedule. train.py limits the
+        # scheduler to this initial rate to avoid late-training spikes.
+        learning_rate=1.0e-3,
+        schedule="adaptive",
         gamma=0.99,
         lam=0.95,
-        desired_kl=None,
+        desired_kl=0.01,
         max_grad_norm=1.0,
     )

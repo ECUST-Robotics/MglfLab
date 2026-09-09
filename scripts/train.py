@@ -36,6 +36,22 @@ import mglf_lab  # noqa: F401
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
+MAX_LEARNING_RATE = 1.0e-3
+
+
+def cap_learning_rate(algorithm, max_learning_rate=MAX_LEARNING_RATE):
+    """Limit adaptive KL scheduling before every optimizer step."""
+
+    def clamp_optimizer_learning_rate(optimizer, args, kwargs):
+        algorithm.learning_rate = min(algorithm.learning_rate, max_learning_rate)
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = min(param_group["lr"], max_learning_rate)
+
+    algorithm.learning_rate = min(algorithm.learning_rate, max_learning_rate)
+    for param_group in algorithm.optimizer.param_groups:
+        param_group["lr"] = min(param_group["lr"], max_learning_rate)
+    algorithm.optimizer.register_step_pre_hook(clamp_optimizer_learning_rate)
+
 
 @hydra_task_config(args_cli.task, "rsl_rl_cfg_entry_point")
 def main(env_cfg, agent_cfg: RslRlOnPolicyRunnerCfg):
@@ -62,6 +78,7 @@ def main(env_cfg, agent_cfg: RslRlOnPolicyRunnerCfg):
     env = gym.make(args_cli.task, cfg=env_cfg)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
     runner = OnPolicyRunner(env, agent_cfg.to_dict(), log_dir=log_dir, device=agent_cfg.device)
+    cap_learning_rate(runner.alg)
     runner.add_git_repo_to_log(__file__)
     if resume_path is not None:
         print(f"[INFO] Resuming from: {resume_path}")

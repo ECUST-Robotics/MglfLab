@@ -43,11 +43,9 @@ class Go2RoughTeleopEnvCfg(UnitreeGo2RoughEnvCfg):
         # Preserve rough-terrain curriculum and add moderate pushes for robust
         # recovery. Go2's upstream task disables this event by default.
         self.scene.terrain.terrain_generator.curriculum = True
-        # Make both ascending and descending stairs more substantial than the
-        # Isaac Lab defaults (0.05--0.23 m). Curriculum still interpolates from
-        # the low to the high end of this range.
-        self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].step_height_range = (0.08, 0.28)
-        self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs_inv"].step_height_range = (0.08, 0.28)
+        # Match the terrain used to train model_5400.pt.
+        self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].step_height_range = (0.05, 0.23)
+        self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs_inv"].step_height_range = (0.05, 0.23)
 
         # Discourage the hip ab/adduction joints from folding the feet inward.
         # This is deliberately moderate so lateral motion and foothold
