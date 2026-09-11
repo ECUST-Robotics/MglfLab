@@ -4,7 +4,7 @@
 > Python 包名：`mglf_lab`  
 > pip 安装包名：`mglf-lab`
 
-基于 Isaaclab_Parkour 当中 teacher 阶段（阶段一）思路的 Unitree Go2 与 Go2W 粗糙地形速度控制项目。策略不依赖 waypoint 或目标点，直接接收遥控速度指令，并利用局部高程扫描适应地形。
+基于 Isaaclab_Parkour 当中 teacher 阶段（阶段一）思路的 Unitree Go2、Go2W 与自定义四足机器人粗糙地形速度控制项目。策略不依赖 waypoint 或目标点，直接接收遥控速度指令，并利用局部高程扫描适应地形。
 
 ## 1. 功能与设计
 
@@ -12,9 +12,9 @@
 - 不使用 waypoint、目标位置或导航规划器。
 - 高程扫描范围为 `1.6 m × 1.0 m`，分辨率为 `0.1 m`，共 187 个采样点，并随机器人 yaw 旋转。
 - 使用 Isaac Lab 的 `ROUGH_TERRAINS_CFG`：上下楼梯、斜坡、离散障碍、箱体和随机粗糙面。
-- Go2 与 Go2W 上下楼梯高度均为 `0.08～0.28 m`。
+- Go2 与 UIKA 上下楼梯高度为 `0.05～0.23 m`；Go2W 楼梯专项课程为 `0.08～0.28 m`。
 - 使用温和的髋关节姿态惩罚抑制内八，同时保留横移和复杂落脚能力。
-- Go2 使用 12 个腿部位置动作；Go2W 使用 12 个腿部位置动作和 4 个轮子速度动作。
+- Go2 和 UIKA 使用 12 个腿部位置动作；Go2W 使用 12 个腿部位置动作和 4 个轮子速度动作。
 - Go2 从项目内的 URDF + mesh 导入，物理参数已对照原 Isaac Lab Go2 USD 校验；详见 [模型一致性记录](source/mglf_lab/data/Robots/unitree/go2_description/USD_PARITY.md)。
 - 使用 Isaac Lab 原生 RSL-RL 流程，不依赖 `Isaaclab_Parkour` 的旧版自定义 runner。
 
@@ -27,11 +27,14 @@ MglfLab/
 ├── source/mglf_lab/
 │   ├── assets/go2w.py                      # Go2W 执行器与初始状态
 │   ├── assets/go2.py                       # Go2 URDF 加载，保留原 USD 训练参数
+│   ├── assets/uika.py                      # UIKA URDF、执行器与初始状态
 │   ├── data/Robots/unitree/go2_description/ # Go2 URDF、网格与一致性记录
 │   ├── data/Robots/unitree/go2w_description/ # Go2W URDF 与网格
+│   ├── data/Robots/uika_description/       # UIKA URDF 与网格
 │   └── tasks/
 │       ├── go2_rough_env_cfg.py            # Go2 环境
 │       ├── go2w_rough_env_cfg.py           # Go2W 轮腿环境
+│       ├── uika_rough_env_cfg.py           # UIKA 环境
 │       ├── rsl_rl_ppo_cfg.py               # Go2 PPO 参数
 │       ├── go2w_rsl_rl_ppo_cfg.py          # Go2W PPO 参数
 │       └── __init__.py                     # Gymnasium 任务注册
@@ -94,14 +97,15 @@ python scripts/play.py --help
 python scripts/play_keyboard.py --help
 ```
 
-项目为两种机器人各注册一个任务；每种机器人的训练和播放共享同一环境配置：
+项目为三种机器人注册任务；每种机器人的训练和播放共享同一环境配置：
 
 | 任务 | 用途 |
 | --- | --- |
 | `Go2-Rough-Teleop-v0` | 训练、随机播放、键盘遥控和可视化 |
 | `Go2W-Rough-Teleop-v0` | Go2W 复杂地形训练、随机播放、键盘遥控和可视化 |
+| `UIKA-Rough-Teleop-v0` | UIKA 粗糙地形训练、随机播放、键盘遥控和可视化 |
 
-脚本默认使用 Go2。训练或播放 Go2W 时必须传入 `--task Go2W-Rough-Teleop-v0`。
+脚本默认使用 Go2。训练或播放 Go2W/UIKA 时必须传入对应的 `--task`。
 
 ## 5. 训练
 
@@ -143,7 +147,7 @@ logs/rsl_rl/go2_rough_teleop/日期_时间_run_name/
 
 ### 5.3 Go2W 冒烟测试与正式训练
 
-Go2 和 Go2W 启动时均由 Isaac Lab 将本地 URDF 转换为仿真使用的 USD。转换时的
+Go2、Go2W 和 UIKA 启动时均由 Isaac Lab 将本地 URDF 转换为仿真使用的 USD。转换时的
 材质名称和 fixed link 合并警告通常不影响训练。
 
 ```bash
@@ -214,7 +218,7 @@ python scripts/train.py \
 
 训练脚本中的 `--checkpoint` 是 `--load_run` 目录内的文件名或匹配表达式。
 
-Go2W 续训时把任务改为 `Go2W-Rough-Teleop-v0`，程序会自动使用其独立实验目录。
+Go2W/UIKA 续训时把任务改为对应 task，程序会自动使用各自独立实验目录。
 
 ### 5.5 数值发散后恢复
 
@@ -254,9 +258,9 @@ ssh -L 6006:localhost:6006 用户名@远程主机地址
 
 ## 7. 多环境随机指令播放
 
-`play.py` 可同时观察多只 Go2 或 Go2W，每个环境独立采样 `[vx, vy, wz]`，每 5～8 秒重新采样。
+`play.py` 可同时观察多只 Go2、Go2W 或 UIKA，每个环境独立采样 `[vx, vy, wz]`，每 5～8 秒重新采样。
 播放仍使用唯一的训练环境配置，但默认把生成的地形网格从训练时的
-`10 × 20` 缩小为 `5 × 5`。可通过 `--terrain_rows` 和 `--terrain_cols` 调整。
+`10 × 20` 缩小为 `6 × 6`。6 列分别对应 6 类地形，行方向按难度从低到高排列。可通过 `--terrain_rows` 和 `--terrain_cols` 调整。
 
 按 run 名称自动选择最新 checkpoint：
 
@@ -283,6 +287,15 @@ python scripts/play.py \
   --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/go2w_rough_teleop/RUN目录/model_XXXX.pt
 ```
 
+UIKA 多环境播放：
+
+```bash
+python scripts/play.py \
+  --task UIKA-Rough-Teleop-v0 \
+  --num_envs 20 \
+  --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/uika_rough_teleop/RUN目录/model_XXXX.pt
+```
+
 ## 8. 键盘遥控播放
 
 `play_keyboard.py` 默认创建一只 Go2：
@@ -298,6 +311,15 @@ Go2W 键盘遥控：
 python scripts/play_keyboard.py \
   --task Go2W-Rough-Teleop-v0 \
   --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/go2w_rough_teleop/RUN目录/model_XXXX.pt \
+  --visualize_height_scan
+```
+
+UIKA 键盘遥控：
+
+```bash
+python scripts/play_keyboard.py \
+  --task UIKA-Rough-Teleop-v0 \
+  --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/uika_rough_teleop/RUN目录/model_XXXX.pt \
   --visualize_height_scan
 ```
 
@@ -337,11 +359,11 @@ python scripts/play_keyboard.py \
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--task` | `Go2-Rough-Teleop-v0` | 机器人任务；Go2W 必须指定 `Go2W-Rough-Teleop-v0` |
+| `--task` | `Go2-Rough-Teleop-v0` | 机器人任务；Go2W/UIKA 必须指定对应 task |
 | `--num_envs` | 环境配置值 | 并行环境数量 |
-| `--max_iterations` | Go2 为 `3000`，Go2W 为 `10000` | 新训练轮数或本次额外续训轮数 |
+| `--max_iterations` | Go2/UIKA 为 `17000`，Go2W 为 `10000` | 新训练轮数或本次额外续训轮数 |
 | `--seed` | `1` | 随机种子 |
-| `--experiment_name` | 随任务选择 | Go2 为 `go2_rough_teleop`，Go2W 为 `go2w_rough_teleop` |
+| `--experiment_name` | 随任务选择 | Go2 为 `go2_rough_teleop`，Go2W 为 `go2w_rough_teleop`，UIKA 为 `uika_rough_teleop` |
 | `--run_name` | 空 | 附加在时间戳后的名称 |
 | `--resume` | 关闭 | 开启恢复训练 |
 | `--reset_optimizer` | 关闭 | 恢复权重和轮数，但不恢复 Adam 状态 |
@@ -356,11 +378,11 @@ python scripts/play_keyboard.py \
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--task` | `Go2-Rough-Teleop-v0` | 必须与 checkpoint 对应；Go2W 使用 `Go2W-Rough-Teleop-v0` |
+| `--task` | `Go2-Rough-Teleop-v0` | 必须与 checkpoint 对应；Go2W/UIKA 使用对应 task |
 | `--num_envs` | `50` | 同时创建的环境数量 |
 | `--seed` | `1` | 地形和随机指令种子 |
-| `--terrain_rows` | `5` | 播放场地的地形行数 |
-| `--terrain_cols` | `5` | 播放场地的地形列数 |
+| `--terrain_rows` | `6` | 播放场地的地形行数 |
+| `--terrain_cols` | `6` | 播放场地的地形列数 |
 | `--load_run` | 自动匹配 | 从实验目录选择 run |
 | `--checkpoint` | 自动选择最新 | 可直接传 checkpoint 绝对路径 |
 | `--real_time` | 默认开启 | 按真实时间限速 |
@@ -372,11 +394,11 @@ python scripts/play_keyboard.py \
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
-| `--task` | `Go2-Rough-Teleop-v0` | 必须与 checkpoint 对应；Go2W 使用 `Go2W-Rough-Teleop-v0` |
+| `--task` | `Go2-Rough-Teleop-v0` | 必须与 checkpoint 对应；Go2W/UIKA 使用对应 task |
 | `--num_envs` | `1` | 环境数量，建议保持 1 |
 | `--seed` | `1` | 地形随机种子 |
-| `--terrain_rows` | `5` | 播放场地的地形行数 |
-| `--terrain_cols` | `5` | 播放场地的地形列数 |
+| `--terrain_rows` | `6` | 播放场地的地形行数 |
+| `--terrain_cols` | `6` | 播放场地的地形列数 |
 | `--load_run` | 自动匹配 | 从实验目录选择 run |
 | `--checkpoint` | 自动选择最新 | 可直接传 checkpoint 绝对路径 |
 | `--linear_step` | `0.2` | 每次按键改变的线速度，单位 `m/s` |
@@ -403,6 +425,64 @@ Go2 策略观测为 235 维：
 | 上一时刻动作 | 12 |
 | 局部高程扫描 | 187 |
 
-Go2W 策略观测为 243 维：腿部相对位置仍为 12 维，关节速度和上一动作分别增加为 16 维，高程扫描仍为 187 维。连续旋转的 4 个轮子角度不会进入策略，防止角度无限累积破坏观测分布。Go2 与 Go2W checkpoint 的输入、输出维度不同，不能混用。
+UIKA 策略与 Go2 同为 235 维观测、12 维动作，但关节顺序、默认姿态和执行器参数不同，checkpoint 不能和 Go2 混用。Go2W 策略观测为 243 维：腿部相对位置仍为 12 维，关节速度和上一动作分别增加为 16 维，高程扫描仍为 187 维。连续旋转的 4 个轮子角度不会进入策略，防止角度无限累积破坏观测分布。Go2、Go2W 与 UIKA checkpoint 不能混用。
 
-部署到真实 Go2 或 Go2W 时必须复现相同的观测顺序、尺度、坐标系、裁剪范围、扫描网格、控制频率和动作映射。仿真中的 RayCaster 不能直接用于真机，需要用深度相机、激光雷达或其他感知模块生成等价的局部高程图。
+部署到真实 Go2、Go2W 或 UIKA 时必须复现相同的观测顺序、尺度、坐标系、裁剪范围、扫描网格、控制频率和动作映射。仿真中的 RayCaster 不能直接用于真机，需要用深度相机、激光雷达或其他感知模块生成等价的局部高程图。
+
+## 11. 仿照 Go2 接入自己的四足机器人：UIKA
+
+UIKA 的接入方式是“复用 Go2 rough 训练策略，替换机器人模型和关节配置”。当前已经注册为 `UIKA-Rough-Teleop-v0`。
+
+关键文件：
+
+| 文件 | 作用 |
+| --- | --- |
+| `source/mglf_lab/data/Robots/uika_description/urdf/uika_simple_collision.urdf` | UIKA 训练用 URDF |
+| `source/mglf_lab/data/Robots/uika_description/meshes/` | UIKA 网格文件 |
+| `source/mglf_lab/assets/uika.py` | URDF 路径、初始关节角、执行器力矩/速度/PD 参数 |
+| `source/mglf_lab/tasks/uika_rough_env_cfg.py` | 继承 Go2 rough 环境，替换 UIKA 机器人、动作关节顺序和脚/机身正则 |
+| `source/mglf_lab/tasks/rsl_rl_ppo_cfg.py` | UIKA PPO runner，实验名为 `uika_rough_teleop` |
+| `source/mglf_lab/tasks/__init__.py` | Gymnasium task 注册 |
+| `setup.py` | 打包时包含 UIKA URDF 与 mesh |
+
+接入新四足时，最少需要按这个顺序改：
+
+1. 把新机器人的 URDF 和 meshes 放进 `source/mglf_lab/data/Robots/你的机器人名_description/`。
+2. 如果 URDF 里有 `package://.../meshes/`，改成相对路径，例如 `../meshes/xxx.STL`。
+3. 复制 `source/mglf_lab/assets/uika.py`，改 URDF 路径、默认站姿、关节名正则、力矩/速度限制和 PD 参数。
+4. 复制 `source/mglf_lab/tasks/uika_rough_env_cfg.py`，改 task 类名、asset import、12 个动作关节顺序、脚部 body 正则和 base body 名。
+5. 在 `source/mglf_lab/tasks/rsl_rl_ppo_cfg.py` 里新增 runner 类，只改 `experiment_name` 即可先跑通。
+6. 在 `source/mglf_lab/tasks/__init__.py` 里注册新的 task id。
+7. 在 `setup.py` 的 `package_data` 中加入新机器人的 `urdf/*` 和 `meshes/*`。
+
+UIKA 冒烟测试：
+
+```bash
+python scripts/train.py \
+  --task UIKA-Rough-Teleop-v0 \
+  --num_envs 32 \
+  --max_iterations 2 \
+  --seed 1 \
+  --headless
+```
+
+UIKA 正式训练：
+
+```bash
+python scripts/train.py \
+  --task UIKA-Rough-Teleop-v0 \
+  --num_envs 1024 \
+  --max_iterations 10000 \
+  --seed 1 \
+  --run_name seed1 \
+  --headless
+```
+
+UIKA 日志独立保存在 `logs/rsl_rl/uika_rough_teleop/`。播放时必须指定同一个 task：
+
+```bash
+python scripts/play_keyboard.py \
+  --task UIKA-Rough-Teleop-v0 \
+  --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/uika_rough_teleop/RUN目录/model_XXXX.pt \
+  --visualize_height_scan
+```
