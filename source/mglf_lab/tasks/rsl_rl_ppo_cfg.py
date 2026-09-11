@@ -38,3 +38,8 @@ class Go2RoughTeleopPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+
+
+@configclass
+class UIKARoughTeleopPPORunnerCfg(Go2RoughTeleopPPORunnerCfg):
+    experiment_name = "uika_rough_teleop"

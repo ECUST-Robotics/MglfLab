@@ -10,8 +10,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--task", default="Go2-Rough-Teleop-v0")
 parser.add_argument("--num_envs", type=int, default=50)
 parser.add_argument("--seed", type=int, default=1)
-parser.add_argument("--terrain_rows", type=int, default=5)
-parser.add_argument("--terrain_cols", type=int, default=5)
+parser.add_argument("--terrain_rows", type=int, default=6)
+parser.add_argument("--terrain_cols", type=int, default=6)
 timing_group = parser.add_mutually_exclusive_group()
 timing_group.add_argument("--real_time", dest="real_time", action="store_true")
 timing_group.add_argument("--no_real_time", dest="real_time", action="store_false")
@@ -43,15 +43,7 @@ import mglf_lab  # noqa: F401
 def main():
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs)
     env_cfg.seed = args_cli.seed
-    terrain_generator = env_cfg.scene.terrain.terrain_generator
-    if terrain_generator is not None:
-        terrain_generator.num_rows = args_cli.terrain_rows
-        terrain_generator.num_cols = args_cli.terrain_cols
-        if env_cfg.scene.terrain.max_init_terrain_level is not None:
-            env_cfg.scene.terrain.max_init_terrain_level = min(
-                env_cfg.scene.terrain.max_init_terrain_level,
-                args_cli.terrain_rows - 1,
-            )
+    cli_args.configure_play_terrain(env_cfg, args_cli.terrain_rows, args_cli.terrain_cols)
     agent_cfg = load_cfg_from_registry(args_cli.task, "rsl_rl_cfg_entry_point")
     agent_cfg = cli_args.update_rsl_rl_cfg(agent_cfg, args_cli)
 

@@ -35,6 +35,28 @@ def resolve_checkpoint(checkpoint: str, retrieve_file_path) -> str:
     return resolved_path
 
 
+def configure_play_terrain(env_cfg, terrain_rows: int, terrain_cols: int):
+    """Configure compact play terrain with one terrain type per column when possible."""
+    terrain_generator = env_cfg.scene.terrain.terrain_generator
+    if terrain_generator is None:
+        return
+
+    terrain_generator.num_rows = terrain_rows
+    terrain_generator.num_cols = terrain_cols
+    terrain_generator.curriculum = True
+
+    sub_terrains = getattr(terrain_generator, "sub_terrains", None)
+    if sub_terrains and terrain_cols == len(sub_terrains):
+        for sub_terrain in sub_terrains.values():
+            sub_terrain.proportion = 1.0
+
+    if env_cfg.scene.terrain.max_init_terrain_level is not None:
+        env_cfg.scene.terrain.max_init_terrain_level = min(
+            env_cfg.scene.terrain.max_init_terrain_level,
+            terrain_rows - 1,
+        )
+
+
 def add_rsl_rl_args(parser: argparse.ArgumentParser):
     group = parser.add_argument_group("rsl_rl")
     group.add_argument("--experiment_name", type=str, default=None)

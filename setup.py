@@ -13,6 +13,8 @@ setup(
             "data/Robots/unitree/go2_description/*.md",
             "data/Robots/unitree/go2w_description/urdf/*",
             "data/Robots/unitree/go2w_description/meshes/*",
+            "data/Robots/uika_description/urdf/*",
+            "data/Robots/uika_description/meshes/*",
             "data/LICENSES/*",
         ]
     },
