@@ -26,6 +26,87 @@ def finite_height_scan(
     return torch.nan_to_num(scan, nan=0.0, posinf=1.0, neginf=-1.0)
 
 
+def degraded_height_scan(
+    env: ManagerBasedEnv,
+    sensor_cfg: SceneEntityCfg,
+    offset: float = 0.5,
+    fill_value: float = 0.0,
+    noise_std: float = 0.025,
+    point_dropout_prob: float = 0.08,
+    block_dropout_prob: float = 0.20,
+    block_size_range: tuple[int, int] = (2, 5),
+    early_step_count: int = 75,
+    early_point_dropout_prob: float = 0.25,
+    early_block_dropout_prob: float = 0.55,
+    grid_shape: tuple[int, int] = (11, 17),
+) -> torch.Tensor:
+    """Return a height scan with missing-map and noise randomization.
+
+    The deployment-side MID360 elevation map can be sparse while it is warming
+    up or when noisy cells are rejected. This keeps the policy from depending
+    on a perfectly dense RayCaster observation during training.
+    """
+
+    scan = finite_height_scan(env, sensor_cfg=sensor_cfg, offset=offset)
+    if scan.numel() == 0:
+        return scan
+
+    if noise_std > 0.0:
+        scan = scan + torch.randn_like(scan) * noise_std
+
+    point_prob = point_dropout_prob
+    block_prob = block_dropout_prob
+    episode_length = getattr(env, "episode_length_buf", None)
+    if episode_length is not None:
+        early = episode_length < early_step_count
+        if torch.any(early):
+            point_prob = torch.full((env.num_envs, 1), point_dropout_prob, device=scan.device)
+            block_prob = torch.full((env.num_envs,), block_dropout_prob, device=scan.device)
+            point_prob[early] = early_point_dropout_prob
+            block_prob[early] = early_block_dropout_prob
+
+    if isinstance(point_prob, torch.Tensor):
+        point_missing = torch.rand_like(scan) < point_prob
+    else:
+        point_missing = torch.rand_like(scan) < point_prob
+
+    missing = point_missing
+    rows, cols = grid_shape
+    if rows * cols == scan.shape[1] and block_dropout_prob > 0.0:
+        if not hasattr(env, "_mglf_height_scan_grid"):
+            row_ids = torch.arange(rows, device=scan.device).repeat_interleave(cols)
+            col_ids = torch.arange(cols, device=scan.device).repeat(rows)
+            env._mglf_height_scan_grid = (row_ids, col_ids)
+        row_ids, col_ids = env._mglf_height_scan_grid
+
+        if isinstance(block_prob, torch.Tensor):
+            has_block = torch.rand(env.num_envs, device=scan.device) < block_prob
+        else:
+            has_block = torch.rand(env.num_envs, device=scan.device) < block_prob
+        block_envs = torch.nonzero(has_block, as_tuple=False).flatten()
+        if block_envs.numel() > 0:
+            min_size, max_size = block_size_range
+            max_size = max(min(max_size, rows, cols), min_size)
+            heights = torch.randint(min_size, max_size + 1, (block_envs.numel(),), device=scan.device)
+            widths = torch.randint(min_size, max_size + 1, (block_envs.numel(),), device=scan.device)
+            centers_r = torch.randint(0, rows, (block_envs.numel(),), device=scan.device)
+            centers_c = torch.randint(0, cols, (block_envs.numel(),), device=scan.device)
+
+            for i, env_id in enumerate(block_envs):
+                half_h = heights[i] // 2
+                half_w = widths[i] // 2
+                block = (
+                    (row_ids >= centers_r[i] - half_h)
+                    & (row_ids <= centers_r[i] + half_h)
+                    & (col_ids >= centers_c[i] - half_w)
+                    & (col_ids <= centers_c[i] + half_w)
+                )
+                missing[env_id, block] = True
+
+    env._mglf_height_scan_missing = missing
+    return torch.where(missing, torch.as_tensor(fill_value, device=scan.device), scan)
+
+
 def command_conditioned_joint_deviation_l2(
     env: ManagerBasedRLEnv,
     command_name: str,

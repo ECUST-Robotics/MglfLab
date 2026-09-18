@@ -4,6 +4,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
 from mglf_lab.assets.uika import UIKA_CFG
+from mglf_lab.tasks import go2w_mdp
 from mglf_lab.tasks.go2_rough_env_cfg import Go2RoughTeleopEnvCfg
 
 
@@ -16,6 +17,20 @@ class UIKARoughTeleopEnvCfg(Go2RoughTeleopEnvCfg):
 
         self.scene.robot = UIKA_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.height_scanner.prim_path = "{ENV_REGEX_NS}/Robot/base"
+        self.observations.policy.height_scan.func = go2w_mdp.degraded_height_scan
+        self.observations.policy.height_scan.params.update(
+            {
+                "fill_value": 0.0,
+                "noise_std": 0.025,
+                "point_dropout_prob": 0.08,
+                "block_dropout_prob": 0.20,
+                "block_size_range": (2, 5),
+                "early_step_count": 75,
+                "early_point_dropout_prob": 0.25,
+                "early_block_dropout_prob": 0.55,
+                "grid_shape": (11, 17),
+            }
+        )
 
         self.actions.joint_pos.joint_names = [
             "FL_hip_joint",

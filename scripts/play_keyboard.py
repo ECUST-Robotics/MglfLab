@@ -37,8 +37,10 @@ import time
 
 import carb
 import gymnasium as gym
+import isaaclab.sim as sim_utils
 import omni.appwindow
 import torch
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from rsl_rl.runners import OnPolicyRunner
 
 from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper
@@ -47,6 +49,57 @@ from isaaclab_tasks.utils import get_checkpoint_path, parse_env_cfg
 from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
 import mglf_lab  # noqa: F401
+
+
+class HeightScanDropoutVisualizer:
+    """Overlay markers for height-scan samples hidden from the policy."""
+
+    def __init__(self, env):
+        self.env = env
+        marker_cfg = VisualizationMarkersCfg(
+            prim_path="/Visuals/MglfHeightScanDropout",
+            markers={
+                "missing": sim_utils.SphereCfg(
+                    radius=0.045,
+                    visual_material=sim_utils.PreviewSurfaceCfg(
+                        diffuse_color=(1.0, 0.55, 0.0),
+                        opacity=0.45,
+                    ),
+                ),
+            },
+        )
+        self.marker = VisualizationMarkers(marker_cfg)
+        self.marker.set_visibility(True)
+
+    def update(self):
+        missing = getattr(self.env, "_mglf_height_scan_missing", None)
+        if missing is None or missing.numel() == 0:
+            self.marker.set_visibility(False)
+            return
+
+        sensor = self.env.scene.sensors.get("height_scanner")
+        if sensor is None or sensor.data.ray_hits_w is None:
+            self.marker.set_visibility(False)
+            return
+
+        first_env_missing = missing[0]
+        if not torch.any(first_env_missing):
+            self.marker.set_visibility(False)
+            return
+
+        points = sensor.data.ray_hits_w[0, first_env_missing]
+        finite = torch.isfinite(points).all(dim=1)
+        points = points[finite]
+        if points.numel() == 0:
+            self.marker.set_visibility(False)
+            return
+
+        # Lift the overlay slightly above the original ray hits so it remains
+        # visible on top of the RayCaster debug points.
+        points = points.clone()
+        points[:, 2] += 0.045
+        self.marker.set_visibility(True)
+        self.marker.visualize(points)
 
 
 class KeyboardVelocityController:
@@ -133,6 +186,7 @@ def main():
 
     command_buffer = env.unwrapped.command_manager.get_command("base_velocity")
     keyboard = KeyboardVelocityController(command_buffer, args_cli.linear_step, args_cli.yaw_step)
+    dropout_visualizer = HeightScanDropoutVisualizer(env.unwrapped) if args_cli.visualize_height_scan else None
     dt = env.unwrapped.step_dt
     try:
         while simulation_app.is_running():
@@ -141,6 +195,8 @@ def main():
             # recompute observations so the policy sees the teleop command.
             keyboard.apply()
             obs = env.get_observations()
+            if dropout_visualizer is not None:
+                dropout_visualizer.update()
             with torch.inference_mode():
                 actions = policy(obs)
                 _, _, dones, _ = env.step(actions)
