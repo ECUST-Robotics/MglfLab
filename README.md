@@ -487,3 +487,114 @@ python scripts/play_keyboard.py \
   --checkpoint /home/mglf/rc/MglfLab/logs/rsl_rl/uika_rough_teleop/RUN目录/model_XXXX.pt \
   --visualize_height_scan
 ```
+
+## 12. Go2 与 Go2W 训练方式对比
+
+本节记录当前源码中的 Go2/Go2W 训练差异，主要对应
+`source/mglf_lab/tasks/go2_rough_env_cfg.py`、
+`source/mglf_lab/tasks/go2w_rough_env_cfg.py`、
+`source/mglf_lab/tasks/rsl_rl_ppo_cfg.py` 和
+`source/mglf_lab/tasks/go2w_rsl_rl_ppo_cfg.py`。
+
+### 12.1 任务与地形
+
+| 项目 | Go2 | Go2W |
+| --- | --- | --- |
+| 任务 ID | `Go2-Rough-Teleop-v0` | `Go2W-Rough-Teleop-v0` |
+| 实验目录 | `logs/rsl_rl/go2_rough_teleop/` | `logs/rsl_rl/go2w_rough_teleop/` |
+| 地形来源 | Isaac Lab `ROUGH_TERRAINS_CFG` | 同 Go2 |
+| terrain curriculum | `True` | 同 Go2 |
+| 上楼梯高度 | `0.05～0.23 m` | 同 Go2 |
+| 下楼梯高度 | `0.05～0.23 m` | 同 Go2 |
+| 高程扫描范围 | `1.6 m × 1.0 m` | 同 Go2 |
+| 高程扫描分辨率 | `0.1 m` | 同 Go2 |
+| 高程扫描点数 | `187` | 同 Go2 |
+| 高程扫描朝向 | yaw-aligned | 同 Go2 |
+| 高程扫描更新周期 | `sim.dt * decimation` | 同 Go2 |
+| 速度指令 | `[vx, vy, wz]` | 同 Go2 |
+| `vx` 范围 | `-1.5～1.5 m/s` | 同 Go2 |
+| `vy` 范围 | `-0.8～0.8 m/s` | 同 Go2 |
+| `wz` 范围 | `-1.5～1.5 rad/s` | 同 Go2 |
+| 指令重采样 | `5.0～8.0 s` | 同 Go2 |
+| standing env 比例 | `0.10` | 同 Go2 |
+| heading command | `False` | 同 Go2 |
+| interval push | 每 `10～15 s`，`x/y=-0.5～0.5 m/s` | 同 Go2 |
+
+### 12.2 动作与观测
+
+| 项目 | Go2 | Go2W |
+| --- | --- | --- |
+| 动作维度 | `12` | `16` |
+| 腿部动作 | 12 个腿关节位置 | 12 个腿关节位置 |
+| 轮子动作 | 无 | 4 个轮子速度 |
+| 腿部 hip action scale | `0.125` | `0.125` |
+| 腿部 thigh/calf action scale | `0.25` | `0.25` |
+| 轮速 action scale | 无 | `5.0 rad/s` |
+| 动作关节顺序 | 继承 Go2 配置 | `FR, FL, RR, RL` 的 12 腿关节，另加 `FR/FL/RR/RL_foot_joint` |
+| 策略观测维度 | `235` | `243` |
+| 关节位置观测 | 12 个腿关节相对位置 | 12 个腿关节相对位置，不含轮子角度 |
+| 关节速度观测 | 12 个腿关节速度 | 12 个腿关节速度 + 4 个轮速 |
+| 上一动作观测 | 12 维 | 16 维 |
+| 高程扫描观测 | 187 维，Isaac Lab height scan | 187 维，`finite_height_scan` 清理 NaN/Inf |
+| 轮子角度是否进观测 | 无轮子 | 不进入，避免连续旋转角度无限累积 |
+
+### 12.3 奖励函数
+
+Go2W 当前策略目标是“狗式步态 + 轮子辅助”，因此保留 Go2 的足式步态主奖励，只额外加入必要的轮子约束。
+
+| 奖励项 | Go2 | Go2W | 说明 |
+| --- | ---: | ---: | --- |
+| `track_lin_vel_xy_exp.weight` | `1.5` | `1.5` | xy 速度跟踪 |
+| `track_lin_vel_xy_exp.std` | `0.5` | `0.5` | xy 速度跟踪指数奖励宽度 |
+| `track_ang_vel_z_exp.weight` | `0.75` | `0.75` | yaw 速度跟踪 |
+| `track_ang_vel_z_exp.std` | `0.5` | `0.5` | yaw 速度跟踪指数奖励宽度 |
+| `lin_vel_z_l2.weight` | `-2.0` | 继承 Go2 | 抑制机身 z 向速度 |
+| `ang_vel_xy_l2.weight` | `-0.05` | 继承 Go2 | 抑制 roll/pitch 角速度 |
+| `dof_torques_l2.weight` | `-0.0002` | `-0.0002`，只作用于腿关节 | 惩罚腿部力矩 |
+| `dof_acc_l2.weight` | `-2.5e-7` | `-2.5e-7`，只作用于腿关节 | 惩罚腿部关节加速度 |
+| `action_rate_l2.weight` | `-0.01` | 继承 Go2 | 惩罚动作变化过快 |
+| `feet_air_time.weight` | `0.01` | 继承 Go2，`0.01` | 保留足式摆腿/换支撑信号 |
+| `hip_joint_deviation_l1.weight` | `-0.1` | 继承 Go2，`-0.1` | 抑制髋关节过度内收/外展 |
+| `undesired_contacts` | `None` | `-1.0`，非轮子部件碰地 | 防止机身、大腿、小腿等贴地爬行 |
+| `wheel_acc_l2.weight` | 无 | `-2.5e-9` | 轻微惩罚轮子加速度抖动 |
+| `wheel_contact_forces.weight` | 无 | `-1.5e-4` | 惩罚过大轮地接触力 |
+| `wheel_contact_forces.threshold` | 无 | `100.0` | 超过阈值的轮地接触力参与惩罚 |
+| `wheel_contact_without_cmd.weight` | 无 | `0.1` | 零速度指令时鼓励轮子稳定接触 |
+| `dof_pos_limits.weight` | `0.0` | `0.0`，只指定腿关节 | 当前无实际奖励影响 |
+| `stand_still` | 无 | 默认关闭 | 需要更强静止站姿时可单独打开 |
+| `joint_pos_penalty` | 无 | 默认关闭 | 会约束腿姿态，可能让步态更保守 |
+| `joint_mirror` | 无 | 默认关闭 | 可用于抑制明显左右/对角不对称 |
+| `joint_power` | 无 | 默认关闭 | 可用于抑制腿部高功率乱甩 |
+| `upward` | 无 | 默认关闭 | Go2 已靠姿态惩罚和终止项维持朝上 |
+
+### 12.4 终止条件与 PPO
+
+| 项目 | Go2 | Go2W |
+| --- | ---: | ---: |
+| `base_contact` termination | 启用，body=`base` | `None`，关闭 |
+| `num_steps_per_env` | `24` | `24` |
+| 默认 `max_iterations` | `17000` | `10000` |
+| `save_interval` | `100` | `50` |
+| `clip_actions` | `10.0` | `10.0` |
+| `empirical_normalization` | `False` | `False` |
+| actor hidden dims | `[512, 256, 128]` | 同 Go2 |
+| critic hidden dims | `[512, 256, 128]` | 同 Go2 |
+| activation | `elu` | 同 Go2 |
+| `init_noise_std` | `1.0` | `1.0` |
+| `noise_std_type` | `log` | `log` |
+| learning rate | `1.0e-3` | `1.0e-3` |
+| schedule | `adaptive` | `adaptive` |
+| desired KL | `0.01` | `0.01` |
+| PPO epochs | `5` | `5` |
+| mini-batches | `4` | `4` |
+| gamma / lambda | `0.99 / 0.95` | `0.99 / 0.95` |
+| entropy coef | `0.01` | `0.005` |
+
+### 12.5 当前设计取向
+
+Go2W 不是按纯四轮车目标训练，而是尽量与 Go2 的狗式粗糙地形任务对齐：
+
+- 保留 Go2 的 `feet_air_time`、速度跟踪、动作平滑、髋关节姿态等主要足式奖励。
+- 轮子角度不进观测，只使用轮速观测和轮速动作。
+- 轮子相关 reward 只作为辅助约束，避免轮子抖动、硬砸地面或非轮子部件贴地。
+- 如果播放时仍出现平地“像车一样滚”的行为，优先尝试降低 `joint_vel.scale`、加入轮速惩罚或提高 `feet_air_time.weight`，而不是一开始加入强腿姿态惩罚。
