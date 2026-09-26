@@ -46,6 +46,15 @@ def handstand_feet_no_contact(env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg
     return torch.all(~is_contact, dim=1).float()
 
 
+def handstand_feet_contact_count(
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, threshold: float = 1.0
+) -> torch.Tensor:
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    net_contact_forces = contact_sensor.data.net_forces_w_history
+    is_contact = torch.max(torch.norm(net_contact_forces[:, :, sensor_cfg.body_ids], dim=-1), dim=1)[0] > threshold
+    return torch.sum(is_contact, dim=1).float()
+
+
 def handstand_support_feet_contact(
     env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg, threshold: float = 1.0
 ) -> torch.Tensor:
@@ -85,6 +94,18 @@ def paired_joint_alignment_l2(
     left_joint_pos = asset.data.joint_pos[:, left_asset_cfg.joint_ids]
     right_joint_pos = asset.data.joint_pos[:, right_asset_cfg.joint_ids]
     return torch.sum(torch.square(left_joint_pos - right_joint_pos), dim=1)
+
+
+def joint_upper_limit_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, upper_limit: float) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    return torch.sum(torch.square(torch.clamp(joint_pos - upper_limit, min=0.0)), dim=1)
+
+
+def joint_target_l2(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg, target: float) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    joint_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    return torch.sum(torch.square(joint_pos - target), dim=1)
 
 
 def handstand_orientation_l2(

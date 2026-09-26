@@ -78,6 +78,46 @@ gym.register(
 )
 
 gym.register(
+    id="Go2W-Flat-Handstand-Front-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "mglf_lab.tasks.go2w_handstand_env_cfg:Go2WHandstandFrontFlatEnvCfg",
+        "rsl_rl_cfg_entry_point": "mglf_lab.tasks.go2w_handstand_rsl_rl_ppo_cfg:Go2WHandstandFrontFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Go2W-Flat-Handstand-Back-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "mglf_lab.tasks.go2w_handstand_env_cfg:Go2WHandstandBackFlatEnvCfg",
+        "rsl_rl_cfg_entry_point": "mglf_lab.tasks.go2w_handstand_rsl_rl_ppo_cfg:Go2WHandstandBackFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Go2W-Flat-Handstand-Left-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "mglf_lab.tasks.go2w_handstand_env_cfg:Go2WHandstandLeftFlatEnvCfg",
+        "rsl_rl_cfg_entry_point": "mglf_lab.tasks.go2w_handstand_rsl_rl_ppo_cfg:Go2WHandstandLeftFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="Go2W-Flat-Handstand-Right-v0",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": "mglf_lab.tasks.go2w_handstand_env_cfg:Go2WHandstandRightFlatEnvCfg",
+        "rsl_rl_cfg_entry_point": "mglf_lab.tasks.go2w_handstand_rsl_rl_ppo_cfg:Go2WHandstandRightFlatPPORunnerCfg",
+    },
+)
+
+gym.register(
     id="UIKA-Rough-Teleop-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,

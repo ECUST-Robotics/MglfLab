@@ -44,6 +44,12 @@ class Go2HandstandRewardsCfg(RewardsCfg):
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=""), "threshold": 1.0},
     )
 
+    handstand_feet_contact_count = RewTerm(
+        func=go2_handstand_mdp.handstand_feet_contact_count,
+        weight=0.0,
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=""), "threshold": 1.0},
+    )
+
     handstand_support_feet_contact = RewTerm(
         func=go2_handstand_mdp.handstand_support_feet_contact,
         weight=0.0,
@@ -81,6 +87,15 @@ class Go2HandstandRewardsCfg(RewardsCfg):
         },
     )
 
+    air_thigh_forward_limit_l2 = RewTerm(
+        func=go2_handstand_mdp.joint_upper_limit_l2,
+        weight=0.0,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[], preserve_order=True),
+            "upper_limit": 1.15,
+        },
+    )
+
     handstand_orientation_l2 = RewTerm(
         func=go2_handstand_mdp.handstand_orientation_l2,
         weight=0.0,
@@ -105,6 +120,9 @@ class Go2HandstandFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
     support_pair_alignment_weight = 0.0
     air_pair_alignment_weight = 0.0
     air_hip_deviation_weight = 0.0
+    air_feet_contact_penalty_weight = 0.0
+    air_thigh_forward_limit_weight = 0.0
+    air_thigh_forward_limit = 1.15
     base_link_name = "base"
     foot_link_name = ".*_foot"
     joint_names = [
@@ -218,6 +236,8 @@ class Go2HandstandFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.handstand_feet_air_time.params["sensor_cfg"].body_names = [air_foot_name]
         self.rewards.handstand_feet_no_contact.weight = 2.0
         self.rewards.handstand_feet_no_contact.params["sensor_cfg"].body_names = [air_foot_name]
+        self.rewards.handstand_feet_contact_count.weight = self.air_feet_contact_penalty_weight
+        self.rewards.handstand_feet_contact_count.params["sensor_cfg"].body_names = [air_foot_name]
         self.rewards.handstand_support_feet_contact.weight = 2.0
         self.rewards.handstand_support_feet_contact.params["sensor_cfg"].body_names = [support_foot_name]
         self.rewards.base_lin_vel_xy_l2.weight = self.base_lin_vel_xy_weight
@@ -245,6 +265,9 @@ class Go2HandstandFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.rewards.air_pair_alignment_l2.weight = self.air_pair_alignment_weight
         self.rewards.air_pair_alignment_l2.params["left_asset_cfg"].joint_names = air_left_joints
         self.rewards.air_pair_alignment_l2.params["right_asset_cfg"].joint_names = air_right_joints
+        self.rewards.air_thigh_forward_limit_l2.weight = self.air_thigh_forward_limit_weight
+        self.rewards.air_thigh_forward_limit_l2.params["asset_cfg"].joint_names = [self._air_thigh_pattern()]
+        self.rewards.air_thigh_forward_limit_l2.params["upper_limit"] = self.air_thigh_forward_limit
 
         self.terminations.illegal_contact.params["sensor_cfg"].body_names = [f"^(?!.*{self.foot_link_name}).*"]
         self.curriculum.terrain_levels = None
@@ -294,6 +317,18 @@ class Go2HandstandFlatEnvCfg(LocomotionVelocityRoughEnvCfg):
             return ".*L_hip_joint"
         if self.handstand_type == "right":
             return ".*R_hip_joint"
+        raise ValueError(f"Unknown handstand_type: {self.handstand_type}")
+
+    def _air_thigh_pattern(self):
+        """Return thigh joints on the feet that should stay lifted."""
+        if self.handstand_type == "front":
+            return "F.*_thigh_joint"
+        if self.handstand_type == "back":
+            return "R.*_thigh_joint"
+        if self.handstand_type == "left":
+            return ".*L_thigh_joint"
+        if self.handstand_type == "right":
+            return ".*R_thigh_joint"
         raise ValueError(f"Unknown handstand_type: {self.handstand_type}")
 
     def _fore_hind_alignment_joint_names(self):
