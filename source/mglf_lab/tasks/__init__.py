@@ -27,13 +27,14 @@ gym.register(
     },
 )
 
+
 gym.register(
-    id="Go2-Flat-Handstand-v0",
+    id="Mglf-Rough-Teleop-v0",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": "mglf_lab.tasks.go2_handstand_env_cfg:Go2HandstandFlatEnvCfg",
-        "rsl_rl_cfg_entry_point": "mglf_lab.tasks.go2_handstand_rsl_rl_ppo_cfg:Go2HandstandFlatPPORunnerCfg",
+        "env_cfg_entry_point": "mglf_lab.tasks.mglf_rough_env_cfg:MglfRoughTeleopEnvCfg",
+        "rsl_rl_cfg_entry_point": "mglf_lab.tasks.rsl_rl_ppo_cfg:MglfRoughTeleopPPORunnerCfg",
     },
 )
 

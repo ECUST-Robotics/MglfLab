@@ -48,6 +48,8 @@ class Go2RoughTeleopEnvCfg(UnitreeGo2RoughEnvCfg):
         # Match the terrain used to train model_5400.pt.
         self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].step_height_range = (0.05, 0.23)
         self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs_inv"].step_height_range = (0.05, 0.23)
+        self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].step_width = 0.3
+        self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs_inv"].step_width = 0.2
 
         # Discourage the hip ab/adduction joints from folding the feet inward.
         # This is deliberately moderate so lateral motion and foothold

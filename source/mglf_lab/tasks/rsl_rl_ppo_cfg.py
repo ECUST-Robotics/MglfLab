@@ -43,3 +43,8 @@ class Go2RoughTeleopPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 @configclass
 class UIKARoughTeleopPPORunnerCfg(Go2RoughTeleopPPORunnerCfg):
     experiment_name = "uika_rough_teleop"
+
+
+@configclass
+class MglfRoughTeleopPPORunnerCfg(Go2RoughTeleopPPORunnerCfg):
+    experiment_name = "mglf_rough_teleop"
